@@ -8,6 +8,7 @@ import warnings
 import os
 import shutil
 import socket
+import time
 
 import requests
 
@@ -351,11 +352,27 @@ class FileContainer(object):
         kwargs.setdefault('cache', True)
         self._target = target
         self._timeout = kwargs.get('remote_timeout', aud.conf.remote_timeout)
+        self._num_tries = kwargs.get('num_tries', 2)
+        self._delay = kwargs.get('delay', 1)
+
         if (os.path.splitext(target)[1] == '.fits' and not
                 ('encoding' in kwargs and kwargs['encoding'] == 'binary')):
             warnings.warn("FITS files must be read as binaries; error is "
                           "likely.", InputWarning)
-        self._readable_object = get_readable_fileobj(target, **kwargs)
+        try:
+            self._readable_object = get_readable_fileobj(target, **kwargs)
+        except URLError as e:
+            if self._num_tries == 0:
+                raise e
+            else:
+                warnings.warn("Problem downloading {}, retrying.".
+                              format(target))
+                time.sleep(self._delay)
+                self._num_tries -= 1
+                self._delay += 1
+                kwargs['num_tries'] = self._num_tries
+                kwargs['delay'] = self._delay
+                self.__init__(target, **kwargs)
 
     def get_fits(self):
         """

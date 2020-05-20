@@ -14,6 +14,7 @@ from astropy.io.votable.tree import VOTableFile, Resource, Table, Field
 from astropy.io.votable import parse
 from six import BytesIO
 from six.moves.urllib_parse import urlsplit, parse_qs
+from six.moves.urllib_error import HTTPError, URLError
 from astroquery.utils.commons import parse_coordinates, FileContainer
 from astropy import units as u
 from astropy.utils.exceptions import AstropyDeprecationWarning
@@ -399,6 +400,21 @@ def test_get_images():
         fits_images = cadc.get_images('08h45m07.5s +54d18m00s', '0.01 deg')
         assert fits_images is not None
         assert isinstance(fits_images[0], HDUList)
+
+
+@patch('astroquery.cadc.core.CadcClass.exec_sync', Mock())
+@patch('astroquery.cadc.core.CadcClass.get_image_list',
+       Mock(side_effect=lambda x, y, z: ['https://some.url']))
+@pytest.mark.skipif(not pyvo_OK, reason='not pyvo_OK')
+def test_get_images_url_error():
+    with pytest.raises(URLError):
+        with patch('astroquery.utils.commons.get_readable_fileobj', autospec=True, \
+                   side_effect=URLError("Some URLLib error.")) as t:
+            t.return_value = open(data_path('query_images.fits'), 'rb')
+
+            cadc = Cadc()
+            fits_images = cadc.get_images('08h45m07.5s +54d18m00s', 0.01*u.deg,
+                                          get_url_list=False)
 
 
 @patch('astroquery.cadc.core.CadcClass.exec_sync', Mock())
